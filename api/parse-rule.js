@@ -9,7 +9,7 @@ const SCHEMA = {
         appliesTo: { type: ['string', 'null'] },
         type: { type: 'string', enum: ['percentage', 'flat'] },
         value: { type: 'number' },
-        stackable: { type: 'boolean' },
+        stackable: { type: ['boolean', 'null'] },
         minCartValue: { type: ['number', 'null'] },
       },
       required: ['scope', 'appliesTo', 'type', 'value', 'stackable', 'minCartValue'],
@@ -39,36 +39,18 @@ Rules:
 - For cart rules, a minimum cart value is required.
 - Return only JSON matching the schema.`
 
+const MAX_DESCRIPTION_LENGTH = 500
+const REQUEST_TIMEOUT_MS = 20000
+
 function send(res, status, data) {
   res.statusCode = status
   res.setHeader('Content-Type', 'application/json')
   res.end(JSON.stringify(data))
 }
 
-async function callProvider(apiKey, baseUrl, model, responseFormat) {
-  const r = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: '' },
-      ],
-      response_format: responseFormat,
-      temperature: 0,
-    }),
-  })
-  return r
-}
-
-// placeholder replaced below
 export async function handleRequest(req, res) {
   if (req.method !== 'POST') {
-    send(res, 405, { status: 'error', message: 'Method not allowed' })
+    send(res, 405, { status: 'error', message: 'Method not allowed. Use POST.' })
     return
   }
 
@@ -81,6 +63,10 @@ export async function handleRequest(req, res) {
   const description = body.description
   if (!description || typeof description !== 'string' || !description.trim()) {
     send(res, 400, { status: 'error', message: 'Description is required.' })
+    return
+  }
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    send(res, 400, { status: 'error', message: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.` })
     return
   }
 
@@ -99,29 +85,44 @@ export async function handleRequest(req, res) {
   ]
 
   async function attempt(responseFormat) {
-    const r = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        response_format: responseFormat,
-        temperature: 0,
-      }),
-    })
-    const text = await r.text()
-    let json
-    try { json = JSON.parse(text) } catch { json = null }
-    return { ok: r.ok, status: r.status, json, text }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    try {
+      const r = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          response_format: responseFormat,
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      })
+      const text = await r.text()
+      let json
+      try { json = JSON.parse(text) } catch { json = null }
+      return { ok: r.ok, status: r.status, json, text }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
+  // First try strict structured outputs.
   let result = await attempt({ type: 'json_schema', json_schema: { name: 'discount_rule', strict: true, schema: SCHEMA } })
 
-  if (!result.ok) {
-    // fallback to json_object if structured outputs unsupported
+  // Fall back to JSON mode ONLY when provider indicates response format unsupported.
+  const unsupportedFormat =
+    !result.ok &&
+    result.status === 400 &&
+    /response_format|json_schema|structured/i.test(
+      (result.json && result.json.error && result.json.error.message) || result.text || ''
+    )
+
+  if (unsupportedFormat) {
     result = await attempt({ type: 'json_object' })
   }
 
@@ -129,15 +130,34 @@ export async function handleRequest(req, res) {
     const msg = result.json && result.json.error && result.json.error.message
       ? result.json.error.message
       : `LLM request failed (${result.status})`
+    // Map common statuses
+    if (result.status === 401) {
+      send(res, 401, { status: 'error', message: 'Authentication failed: invalid LLM API key.' })
+      return
+    }
+    if (result.status === 429) {
+      send(res, 429, { status: 'error', message: 'Rate limit exceeded. Try again later.' })
+      return
+    }
+    if (result.status >= 500) {
+      send(res, 502, { status: 'error', message: 'LLM provider unavailable.' })
+      return
+    }
     send(res, 502, { status: 'error', message: msg })
     return
   }
 
-  const content = result.json && result.json.choices && result.json.choices[0] && result.json.choices[0].message
-    ? result.json.choices[0].message.content
-    : null
+  const choice = result.json && result.json.choices && result.json.choices[0]
+  const message = choice ? choice.message : null
 
-  if (!content) {
+  // Refusal handling: check provider's refusal field on the message.
+  if (message && message.refusal) {
+    send(res, 200, { status: 'error', message: `LLM refused: ${message.refusal}` })
+    return
+  }
+
+  const content = message ? message.content : null
+  if (!content || typeof content !== 'string') {
     send(res, 502, { status: 'error', message: 'Empty response from LLM.' })
     return
   }
@@ -150,9 +170,14 @@ export async function handleRequest(req, res) {
     return
   }
 
-  // Handle refusal
-  if (parsed && parsed.refusal) {
-    send(res, 200, { status: 'error', message: 'LLM refused to parse the request.' })
+  // Validate status field
+  const allowedStatuses = ['ready', 'needs_clarification', 'error']
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    send(res, 502, { status: 'error', message: 'LLM response is not a JSON object.' })
+    return
+  }
+  if (!allowedStatuses.includes(parsed.status)) {
+    send(res, 502, { status: 'error', message: 'LLM returned an unsupported status.' })
     return
   }
 
@@ -167,8 +192,18 @@ export async function handleRequest(req, res) {
     return
   }
 
-  const rawRule = parsed.status === 'ready' ? parsed.rule : parsed
+  if (parsed.status === 'error') {
+    send(res, 200, {
+      status: 'error',
+      message: typeof parsed.message === 'string' ? parsed.message : 'LLM reported an error.',
+    })
+    return
+  }
+
+  // ready
+  const rawRule = parsed.rule !== undefined ? parsed.rule : parsed
   const v = validateLLMRule(rawRule)
+  // normalize missing stackable default handled in validator
   send(res, 200, v)
 }
 

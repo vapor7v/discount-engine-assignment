@@ -55,7 +55,13 @@ export function parseCartPDFLines(lines) {
   let headerIdx = lines.findIndex(
     (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
   )
-  const dataLines = headerIdx >= 0 ? lines.slice(headerIdx + 1) : lines
+  if (headerIdx === -1) {
+    return { data, errors: ['Missing required table header (Product, Brand, Platform, Base Price).'] }
+  }
+
+  const isHeaderLine = (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
+
+  const dataLines = lines.slice(headerIdx + 1).filter((l) => !isHeaderLine(l))
 
   if (dataLines.length === 0) {
     return { data, errors: ['No cart rows found in PDF.'] }
@@ -80,7 +86,15 @@ export function parseCartPDFLines(lines) {
       product = fields.slice(0, fields.length - 3).join(' ')
     }
 
-    const price = parseFloat(String(priceStr).replace(/[^\d.\-]/g, ''))
+    // Strict price validation: allow optional currency symbol and thousands separators.
+    const priceCandidate = String(priceStr).trim()
+    const stripped = priceCandidate.replace(/^[₹$€£\s]+|[₹$€£\s]+$/g, '')
+    if (!/^[\d,]+(?:\.\d{1,2})?$/.test(stripped)) {
+      errors.push(`Row ${rowNum}: invalid base price "${priceStr}"`)
+      return
+    }
+    const noThousands = stripped.replace(/,/g, '')
+    const price = parseFloat(noThousands)
     if (isNaN(price) || price <= 0) {
       errors.push(`Row ${rowNum}: invalid base price "${priceStr}"`)
       return

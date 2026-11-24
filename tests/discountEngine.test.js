@@ -27,7 +27,6 @@ describe('discountEngine item-level', () => {
       { ruleId: 'R2', scope: 'brand', appliesTo: 'B', type: 'flat', value: 200, stackable: false },
     ]
     const r = applyDiscounts(baseItem({ basePrice: 1000 }), rules)
-    // flat 200 > 10% 100
     expect(r.finalPrice).toBe(800)
     expect(r.appliedRules).toEqual(['R2'])
     expect(r.skippedRules).toContain('R1')
@@ -39,7 +38,6 @@ describe('discountEngine item-level', () => {
       { ruleId: 'R2', scope: 'brand', appliesTo: 'B', type: 'flat', value: 50, stackable: true },
     ]
     const r = applyDiscounts(baseItem({ basePrice: 1000 }), rules)
-    // percentage first: 1000-100=900, flat 50 => 850
     expect(r.finalPrice).toBe(850)
     expect(r.appliedRules).toEqual(['R1', 'R2'])
   })
@@ -73,16 +71,22 @@ describe('discountEngine item-level', () => {
     expect(r.totalDiscount).toBe(1000)
   })
 
-  it('mixed non-stackable + stackable', () => {
+  it('reversed input order yields identical result', () => {
     const rules = [
-      { ruleId: 'R1', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 15, stackable: false },
-      { ruleId: 'R2', scope: 'brand', appliesTo: 'B', type: 'flat', value: 100, stackable: false },
-      { ruleId: 'R3', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 5, stackable: true },
+      { ruleId: 'R1', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 10, stackable: true },
+      { ruleId: 'R2', scope: 'brand', appliesTo: 'B', type: 'flat', value: 50, stackable: true },
     ]
-    const r = applyDiscounts(baseItem({ basePrice: 1000 }), rules)
-    // winner: flat 100 vs 15% 150 -> percentage 150 wins; then stack 5% of 850 = 42.5 -> 43 (rounded? paise: 85000*5/100=4250 paise=42.5 rupees -> toRupees rounds 43? Wait toRupees(4250)=43? 4250/100=42.5 -> Math.round=43. Hmm. Let's just check not crash)
-    expect(r.appliedRules).toContain('R1')
-    expect(r.appliedRules).toContain('R3')
+    const reversed = [...rules].reverse()
+    const r1 = applyDiscounts(baseItem({ basePrice: 1000 }), rules)
+    const r2 = applyDiscounts(baseItem({ basePrice: 1000 }), reversed)
+    expect(r1.finalPrice).toBe(r2.finalPrice)
+    expect(r1.appliedRules).toEqual(r2.appliedRules)
+  })
+
+  it('totalDiscount reconciles with finalPrice', () => {
+    const rules = [{ ruleId: 'R1', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 15, stackable: false }]
+    const r = applyDiscounts(baseItem({ basePrice: 1299 }), rules)
+    expect(r.totalDiscount).toBe(r.basePrice - r.finalPrice)
   })
 })
 
@@ -95,7 +99,6 @@ describe('cart-level', () => {
 
   it('cart above threshold applies discount', () => {
     const res = processCart(items, rules)
-    // item finals 3000+2000=5000; 10% = 500; final 4500
     expect(res.subtotal).toBe(5000)
     expect(res.cartDiscount).toBe(500)
     expect(res.finalTotal).toBe(4500)
@@ -124,7 +127,6 @@ describe('cart-level', () => {
       { ruleId: 'C2', scope: 'cart', type: 'flat', value: 600, stackable: false, minCartValue: 4000 },
     ]
     const res = processCart(items, r)
-    // 10% of 5000 = 500 vs 600 -> 600
     expect(res.cartDiscount).toBe(600)
   })
 

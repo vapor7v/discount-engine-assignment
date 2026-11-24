@@ -74,7 +74,8 @@ export function applyDiscounts(item, rules) {
     .sort((a, b) => {
       const aPct = a.type === 'percentage' ? 0 : 1
       const bPct = b.type === 'percentage' ? 0 : 1
-      return aPct - bPct
+      if (aPct !== bPct) return aPct - bPct
+      return String(a.ruleId).localeCompare(String(b.ruleId))
     })
 
   let winner = null
@@ -82,8 +83,11 @@ export function applyDiscounts(item, rules) {
 
   if (nonStackable.length > 0) {
     const sorted = [...nonStackable].sort(
-      (a, b) =>
-        calculateDiscountAmount(basePaise, b) - calculateDiscountAmount(basePaise, a)
+      (a, b) => {
+        const diff = calculateDiscountAmount(basePaise, b) - calculateDiscountAmount(basePaise, a)
+        if (diff !== 0) return diff
+        return String(a.ruleId).localeCompare(String(b.ruleId))
+      }
     )
     winner = sorted[0]
     skipped = sorted.slice(1)
@@ -136,14 +140,18 @@ export function applyCartDiscount(subtotalRupees, cartRules) {
     .sort((a, b) => {
       const aPct = a.type === 'percentage' ? 0 : 1
       const bPct = b.type === 'percentage' ? 0 : 1
-      return aPct - bPct
+      if (aPct !== bPct) return aPct - bPct
+      return String(a.ruleId).localeCompare(String(b.ruleId))
     })
 
   let winner = null
   if (nonStackable.length > 0) {
     const sorted = [...nonStackable].sort(
-      (a, b) =>
-        calculateDiscountAmount(subtotalPaise, b) - calculateDiscountAmount(subtotalPaise, a)
+      (a, b) => {
+        const diff = calculateDiscountAmount(subtotalPaise, b) - calculateDiscountAmount(subtotalPaise, a)
+        if (diff !== 0) return diff
+        return String(a.ruleId).localeCompare(String(b.ruleId))
+      }
     )
     winner = sorted[0]
   }

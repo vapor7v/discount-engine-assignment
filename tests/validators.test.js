@@ -72,9 +72,9 @@ describe('validateLLMRule', () => {
     const r = validateLLMRule({ scope: 'cart', type: 'percentage', value: 10, minCartValue: -1, stackable: false })
     expect(r.status).toBe('error')
   })
-  it('defaults stackable? missing -> clarification', () => {
+  it('missing stackable defaults to false', () => {
     const r = validateLLMRule({ scope: 'brand', appliesTo: 'X', type: 'percentage', value: 10 })
-    expect(r.status).toBe('needs_clarification')
-    expect(r.missing).toContain('stackable')
+    expect(r.status).toBe('ready')
+    expect(r.rule.stackable).toBe(false)
   })
 })

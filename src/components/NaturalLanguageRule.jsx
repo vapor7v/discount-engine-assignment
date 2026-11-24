@@ -15,13 +15,18 @@ export default function NaturalLanguageRule({ onAddRule }) {
       return
     }
     setLoading(true)
-    const r = await parseNaturalLanguageRule(input)
-    setLoading(false)
-    if (r.status === 'error') {
-      setError(r.message)
-      return
+    try {
+      const r = await parseNaturalLanguageRule(input)
+      if (r.status === 'error') {
+        setError(r.message)
+      } else {
+        setResult(r)
+      }
+    } catch (e) {
+      setError(e && e.message ? e.message : 'Unexpected error.')
+    } finally {
+      setLoading(false)
     }
-    setResult(r)
   }
 
   function handleConfirm() {

@@ -207,7 +207,17 @@ export default function App() {
           </div>
         </div>
 
-        {/* Results */}
+        {/* Calculate button */}
+        <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
+          <button
+            style={canCalculate ? S.btn : S.btnDisabled}
+            onClick={() => setResults(processCart(cartItems, rules))}
+            disabled={!canCalculate}
+          >
+            Calculate Discounts
+          </button>
+        </div>
+
         {results && (
           <div style={S.section}>
             <div style={S.sectionTitle}>Cart Summary</div>
@@ -216,9 +226,6 @@ export default function App() {
               <div>Cart subtotal: <strong>Rs.{results.subtotal.toLocaleString('en-IN')}</strong></div>
               {results.cartDiscount > 0 && (
                 <div>Cart offer: {results.cartReasoning} — Cart discount: <strong>Rs.{results.cartDiscount.toLocaleString('en-IN')}</strong></div>
-              )}
-              {results.cartDiscount === 0 && (
-                <div style={{ color: '#888' }}>No cart offer applied</div>
               )}
             </div>
             <div style={S.totalRow}>

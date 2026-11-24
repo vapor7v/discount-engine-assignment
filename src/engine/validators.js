@@ -47,7 +47,6 @@ export function validateLLMRule(raw) {
   }
   if (!raw.type) missing.push('type')
   if (raw.value === undefined || raw.value === null || raw.value === '') missing.push('value')
-  if (raw.stackable === undefined || raw.stackable === null) missing.push('stackable')
   if (raw.scope === 'cart' && (raw.minCartValue === undefined || raw.minCartValue === null || raw.minCartValue === '')) {
     missing.push('minCartValue')
   }
@@ -66,7 +65,11 @@ export function validateLLMRule(raw) {
   const value = Number(raw.value)
   if (!isFinite(value) || value <= 0) errors.push('value must be a positive number')
   if (raw.type === 'percentage' && value > 100) errors.push('percentage value cannot exceed 100')
-  if (typeof raw.stackable !== 'boolean') errors.push('stackable must be a boolean')
+  let stackable = false
+  if (raw.stackable !== undefined && raw.stackable !== null) {
+    if (typeof raw.stackable !== 'boolean') errors.push('stackable must be a boolean')
+    else stackable = raw.stackable
+  }
 
   let minCartValue
   if (raw.scope === 'cart') {
@@ -88,7 +91,7 @@ export function validateLLMRule(raw) {
     scope: raw.scope,
     type: raw.type,
     value,
-    stackable: Boolean(raw.stackable),
+    stackable,
   }
   if (appliesTo) rule.appliesTo = appliesTo
   if (raw.scope === 'cart') rule.minCartValue = minCartValue
