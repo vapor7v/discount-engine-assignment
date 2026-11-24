@@ -156,6 +156,10 @@ export default function App() {
     setRules((prev) => [...prev, newRule])
   }
 
+  function handleCalculate() {
+    setResults(processCart(cartItems, rules))
+  }
+
   const canCalculate = rules.length > 0 && cartItems.length > 0
 
   return (
@@ -225,7 +229,7 @@ export default function App() {
         <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
           <button
             style={canCalculate ? S.btn : S.btnDisabled}
-            onClick={() => setResults(processCart(cartItems, rules))}
+            onClick={handleCalculate}
             disabled={!canCalculate}
           >
             Calculate Discounts

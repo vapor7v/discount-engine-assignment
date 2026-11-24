@@ -74,7 +74,22 @@ Subtotal ₹5,932; cart discount ₹593; final ₹5,339.
 5. Test cart threshold boundary (exact/below).
 6. Check responsive layout on mobile width.
 
-## Assumptions
+## Live Demo
+
+**Production URL:** https://discount-engine-assignment-three-khaki.vercel.app/
+
+## Demo Walkthrough
+
+**Loom video:** [Add your Loom recording link here]
+
+## Key Implementation Decisions
+
+1. **Discount selection:** For competing non-stackable rules, choose the largest saving. Apply stackable discounts sequentially after the winning rule.
+
+2. **Cart-level discounts:** Evaluate the minimum cart threshold against the subtotal after item-level discounts. The threshold is inclusive (>=).
+
+3. **Input validation:** Keep CSV, natural-language and PDF parsing separate from the core calculation engine. Reject invalid rules and malformed PDF carts rather than silently accepting incomplete data.
+
 
 - LLM provider is OpenAI-compatible; configured via env.
 - PDFs are text-based; scanned PDFs rejected.
