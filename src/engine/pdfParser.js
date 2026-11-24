@@ -73,13 +73,9 @@ export function parseCartPDFLines(lines) {
 
     const fields = trimmed.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean)
     if (fields.length < 4) {
-      // Skip obvious metadata/footer lines, but flag malformed product rows.
       if (/^(total|subtotal|grand total)/i.test(trimmed)) return
-      const hasPriceLike = fields.some((f) => /\d/.test(f))
-      if (hasPriceLike) {
-        errors.push(`Row ${rowNum}: expected 4 columns (Product, Brand, Platform, Base Price), got ${fields.length}`)
-        return
-      }
+      if (isFooterLine(trimmed)) return
+      errors.push(`Row ${rowNum}: expected 4 columns (Product, Brand, Platform, Base Price), got ${fields.length}`)
       return
     }
 

@@ -68,7 +68,9 @@ describe('integration', () => {
     await waitFor(() => {
       expect(screen.getByText(/5 rules loaded/)).toBeTruthy()
     })
-    expect(screen.getAllByText('Natura Casa').length).toBeGreaterThan(0)
+    expect(screen.getByText(/5,846/)).toBeTruthy()
+    expect(screen.getByText(/585/)).toBeTruthy()
+    expect(screen.getByText(/5,261/)).toBeTruthy()
   })
 
   it('NL discard does not add rule or change totals', async () => {
@@ -95,6 +97,7 @@ describe('integration', () => {
     })
     expect(screen.getByText(/4 rules loaded/)).toBeTruthy()
     expect(screen.getByText(/5,932/)).toBeTruthy()
+    expect(screen.getByText(/5,339/)).toBeTruthy()
   })
 
   it('PDF cart replacement', async () => {
@@ -150,7 +153,7 @@ describe('integration', () => {
     const newCartCsv = `item_id,product,brand,platform,base_price\nX,Test,Natura Casa,Amazon India,1000`
     uploadFile(inputs[1], newCartCsv, 'cart.csv')
     await waitFor(() => {
-      expect(screen.getByText(/1,000|1000/)).toBeTruthy()
+      expect(screen.getAllByText(/850/).length).toBeGreaterThan(0)
     })
     expect(screen.queryByText(/5,932/)).toBeNull()
   })

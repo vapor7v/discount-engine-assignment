@@ -92,6 +92,17 @@ describe('parseCartPDFLines', () => {
     expect(data).toHaveLength(2)
   })
 
+  it('malformed row with three columns and no numeric field', () => {
+    const lines = [
+      'Product  Brand  Platform  Base Price',
+      'Good Item  Brand A  Amazon  100',
+      'Broken Item  Brand B  Flipkart',
+    ]
+    const { data, errors } = parseCartPDFLines(lines)
+    expect(data).toHaveLength(0)
+    expect(errors.length).toBeGreaterThan(0)
+  })
+
   it('malformed row with fewer than four columns', () => {
     const lines = [
       'Product  Brand  Platform  Base Price',
@@ -102,7 +113,6 @@ describe('parseCartPDFLines', () => {
     expect(data).toHaveLength(0)
     expect(errors.length).toBeGreaterThan(0)
   })
-
   it('legitimate product containing Total', () => {
     const lines = [
       'Product  Brand  Platform  Base Price',
