@@ -139,6 +139,36 @@ describe('parse-rule API', () => {
     expect(res.statusCode).toBe(502)
   })
 
+  it('network failure', async () => {
+    fetchMock.mockRejectedValue(new Error('network down'))
+    const res = mockRes()
+    await handleRequest(mockReq('POST', { description: 'test' }), res)
+    expect(res.statusCode).toBe(502)
+    const body = JSON.parse(res.body)
+    expect(body.status).toBe('error')
+  })
+
+  it('request timeout', async () => {
+    fetchMock.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ ok: true, status: 200, text: async () => '{}' }), 100000)))
+    const res = mockRes()
+    // temporarily lower timeout by env? Use real; instead mock AbortError
+    fetchMock.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    await handleRequest(mockReq('POST', { description: 'test' }), res)
+    expect(res.statusCode).toBe(504)
+  })
+
+  it('incomplete output', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: '{"status":"ready"' }, finish_reason: 'length' }] }),
+    })
+    const res = mockRes()
+    await handleRequest(mockReq('POST', { description: 'test' }), res)
+    const body = JSON.parse(res.body)
+    expect(body.status).toBe('error')
+    expect(body.message).toMatch(/incomplete|truncated/i)
+  })
   it('malformed response', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

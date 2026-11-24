@@ -88,6 +88,22 @@ describe('discountEngine item-level', () => {
     const r = applyDiscounts(baseItem({ basePrice: 1299 }), rules)
     expect(r.totalDiscount).toBe(r.basePrice - r.finalPrice)
   })
+
+  it('monetary rounding 1005 with 10% discount', () => {
+    const rules = [{ ruleId: 'R1', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 10, stackable: false }]
+    const r = applyDiscounts(baseItem({ basePrice: 1005 }), rules)
+    expect(r.finalPrice).toBe(905)
+    expect(r.totalDiscount).toBe(100)
+  })
+
+  it('fractional percentage sequential', () => {
+    const rules = [
+      { ruleId: 'R1', scope: 'platform', appliesTo: 'Plat', type: 'percentage', value: 10, stackable: false },
+      { ruleId: 'R2', scope: 'brand', appliesTo: 'B', type: 'percentage', value: 5, stackable: true },
+    ]
+    const r = applyDiscounts(baseItem({ basePrice: 1005 }), rules)
+    expect(r.totalDiscount).toBe(baseItem({ basePrice: 1005 }).basePrice - r.finalPrice)
+  })
 })
 
 describe('cart-level', () => {

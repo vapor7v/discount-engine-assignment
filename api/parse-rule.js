@@ -112,9 +112,18 @@ export async function handleRequest(req, res) {
   }
 
   // First try strict structured outputs.
-  let result = await attempt({ type: 'json_schema', json_schema: { name: 'discount_rule', strict: true, schema: SCHEMA } })
+  let result
+  try {
+    result = await attempt({ type: 'json_schema', json_schema: { name: 'discount_rule', strict: true, schema: SCHEMA } })
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      send(res, 504, { status: 'error', message: 'LLM request timed out.' })
+      return
+    }
+    send(res, 502, { status: 'error', message: 'Network error contacting LLM provider.' })
+    return
+  }
 
-  // Fall back to JSON mode ONLY when provider indicates response format unsupported.
   const unsupportedFormat =
     !result.ok &&
     result.status === 400 &&
@@ -123,7 +132,16 @@ export async function handleRequest(req, res) {
     )
 
   if (unsupportedFormat) {
-    result = await attempt({ type: 'json_object' })
+    try {
+      result = await attempt({ type: 'json_object' })
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        send(res, 504, { status: 'error', message: 'LLM request timed out.' })
+        return
+      }
+      send(res, 502, { status: 'error', message: 'Network error contacting LLM provider.' })
+      return
+    }
   }
 
   if (!result.ok) {
@@ -149,6 +167,12 @@ export async function handleRequest(req, res) {
 
   const choice = result.json && result.json.choices && result.json.choices[0]
   const message = choice ? choice.message : null
+  const finishReason = choice ? choice.finish_reason : null
+
+  if (finishReason && finishReason !== 'stop') {
+    send(res, 502, { status: 'error', message: 'LLM response was incomplete or truncated.' })
+    return
+  }
 
   // Refusal handling: check provider's refusal field on the message.
   if (message && message.refusal) {

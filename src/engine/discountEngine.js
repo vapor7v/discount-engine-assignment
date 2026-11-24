@@ -112,7 +112,7 @@ export function applyDiscounts(item, rules) {
   }
 
   const finalPrice = toRupees(pricePaise)
-  const totalDiscount = toRupees(basePaise - pricePaise)
+  const totalDiscount = item.basePrice - finalPrice
 
   return {
     itemId: item.itemId,

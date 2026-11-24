@@ -14,7 +14,7 @@ async function extractTextLines(file) {
     const content = await page.getTextContent()
     const items = content.items
       .filter((it) => it.str && it.str.trim() !== '')
-      .map((it) => ({ text: it.str, x: it.transform[4], y: it.transform[5] }))
+      .map((it) => ({ text: it.str, x: it.transform[4], y: it.transform[5], width: typeof it.width === 'number' ? it.width : it.str.length * 4.5 }))
 
     const groups = []
     const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x)
@@ -32,9 +32,9 @@ async function extractTextLines(file) {
       let line = ''
       let prevEnd = null
       for (const it of rowItems) {
-        if (prevEnd !== null && it.x - prevEnd > 6) line += '  '
+        if (prevEnd !== null && it.x - prevEnd > 3) line += '  '
         line += it.text
-        prevEnd = it.x + it.text.length * 4.5
+        prevEnd = it.x + (it.width || it.text.length * 4.5)
       }
       const trimmed = line.trim()
       if (trimmed) allLines.push(trimmed)
@@ -44,6 +44,9 @@ async function extractTextLines(file) {
   return allLines
 }
 
+const isHeaderLine = (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
+const isFooterLine = (l) => /total|page\s*\d|^\s*\d+\s*$/i.test(l)
+
 export function parseCartPDFLines(lines) {
   const data = []
   const errors = []
@@ -52,16 +55,12 @@ export function parseCartPDFLines(lines) {
     return { data, errors: ['PDF contains no extractable text (possibly scanned or empty).'] }
   }
 
-  let headerIdx = lines.findIndex(
-    (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
-  )
+  const headerIdx = lines.findIndex(isHeaderLine)
   if (headerIdx === -1) {
     return { data, errors: ['Missing required table header (Product, Brand, Platform, Base Price).'] }
   }
 
-  const isHeaderLine = (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
-
-  const dataLines = lines.slice(headerIdx + 1).filter((l) => !isHeaderLine(l))
+  const dataLines = lines.slice(headerIdx + 1)
 
   if (dataLines.length === 0) {
     return { data, errors: ['No cart rows found in PDF.'] }
@@ -69,12 +68,11 @@ export function parseCartPDFLines(lines) {
 
   dataLines.forEach((line, i) => {
     const rowNum = i + 1
-    const fields = line.trim().split(/\s{2,}/).map((s) => s.trim()).filter(Boolean)
+    const trimmed = line.trim()
+    if (!trimmed || isHeaderLine(trimmed) || isFooterLine(trimmed)) return
 
-    if (fields.length < 4) {
-      errors.push(`Row ${rowNum}: expected 4 columns (Product, Brand, Platform, Base Price), got ${fields.length}`)
-      return
-    }
+    const fields = trimmed.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean)
+    if (fields.length < 4) return
 
     let product, brand, platform, priceStr
     if (fields.length === 4) {
@@ -86,7 +84,6 @@ export function parseCartPDFLines(lines) {
       product = fields.slice(0, fields.length - 3).join(' ')
     }
 
-    // Strict price validation: allow optional currency symbol and thousands separators.
     const priceCandidate = String(priceStr).trim()
     const stripped = priceCandidate.replace(/^[₹$€£\s]+|[₹$€£\s]+$/g, '')
     if (!/^[\d,]+(?:\.\d{1,2})?$/.test(stripped)) {

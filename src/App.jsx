@@ -5,7 +5,7 @@ import NaturalLanguageRule from './components/NaturalLanguageRule.jsx'
 import DataTable from './components/DataTable.jsx'
 import ErrorBanner from './components/ErrorBanner.jsx'
 import { parseRulesCSV, parseCartCSV } from './engine/csvParser.js'
-import { processCart, cartTotal } from './engine/discountEngine.js'
+import { processCart } from './engine/discountEngine.js'
 
 const RULES_COLUMNS = [
   { key: 'ruleId',    label: 'Rule ID' },

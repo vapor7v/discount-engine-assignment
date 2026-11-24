@@ -2,16 +2,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import App from '../src/App.jsx'
 
+vi.mock('../src/engine/pdfParser.js', () => ({
+  parseCartPDF: vi.fn(),
+}))
+
+import { parseCartPDF } from '../src/engine/pdfParser.js'
+
 function uploadFile(input, content, name, type = 'text/csv') {
   const file = new File([content], name, { type })
   fireEvent.change(input, { target: { files: [file] } })
 }
 
-const rulesCsv = (extra = '') => `rule_id,scope,applies_to,type,value,stackable,min_cart_value
+const rulesCsv = `rule_id,scope,applies_to,type,value,stackable,min_cart_value
 RULE-01,platform,Amazon India,percentage,15,false,
 RULE-02,brand,Natura Casa,flat,150,false,
 RULE-03,platform,Flipkart,percentage,10,true,
-RULE-04,cart,,percentage,10,false,4000${extra}`
+RULE-04,cart,,percentage,10,false,4000`
 
 const cartCsv = `item_id,product,brand,platform,base_price
 ITEM-01,Cushion Cover,Natura Casa,Amazon India,1299
@@ -21,33 +27,39 @@ ITEM-04,Ceramic Vase,LivSpace Pro,Noon,2499
 ITEM-05,Cutting Board,Nordic Basics,Amazon India,449
 ITEM-06,Desk Organiser,Nordic Basics,Flipkart,899`
 
+const newCart = [
+  { itemId: 'PDF-1', product: 'New Product', brand: 'Natura Casa', platform: 'Amazon India', basePrice: 1000 },
+]
+
 describe('integration', () => {
   beforeEach(() => {
     global.fetch = vi.fn()
+    parseCartPDF.mockReset()
   })
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('uploads rules and cart CSV then shows expected amounts', async () => {
+  it('CSV workflow shows expected amounts', async () => {
     render(<App />)
     const inputs = document.querySelectorAll('input[type="file"]')
-    uploadFile(inputs[0], rulesCsv(), 'rules.csv')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
     await waitFor(() => {
       expect(screen.getByText(/Cart subtotal:/)).toBeTruthy()
     })
     expect(screen.getByText(/5,932/)).toBeTruthy()
+    expect(screen.getByText(/5,339/)).toBeTruthy()
   })
 
-  it('adds NL rule on confirm and recalculates', async () => {
+  it('NL workflow confirm and discard', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ status: 'ready', rule: { scope: 'brand', appliesTo: 'Natura Casa', type: 'percentage', value: 5, stackable: true } }),
     })
     render(<App />)
     const inputs = document.querySelectorAll('input[type="file"]')
-    uploadFile(inputs[0], rulesCsv(), 'rules.csv')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
 
     const textarea = screen.getByPlaceholderText(/e.g./)
@@ -58,20 +70,13 @@ describe('integration', () => {
     await waitFor(() => {
       expect(screen.getByText(/rules loaded/)).toBeTruthy()
     }, { timeout: 3000 })
-  })
 
-  it('discard does not add rule', async () => {
+    // discard another
     global.fetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ status: 'ready', rule: { scope: 'brand', appliesTo: 'Natura Casa', type: 'percentage', value: 5, stackable: true } }),
+      json: async () => ({ status: 'ready', rule: { scope: 'brand', appliesTo: 'Natura Casa', type: 'percentage', value: 7, stackable: true } }),
     })
-    render(<App />)
-    const inputs = document.querySelectorAll('input[type="file"]')
-    uploadFile(inputs[0], rulesCsv(), 'rules.csv')
-    uploadFile(inputs[1], cartCsv, 'cart.csv')
-
-    const textarea = screen.getByPlaceholderText(/e.g./)
-    fireEvent.change(textarea, { target: { value: '5% off Natura Casa stackable' } })
+    fireEvent.change(textarea, { target: { value: '7% off Natura Casa stackable' } })
     fireEvent.click(screen.getByText('Parse Rule'))
     await waitFor(() => screen.getByText('Discard'))
     fireEvent.click(screen.getByText('Discard'))
@@ -80,13 +85,57 @@ describe('integration', () => {
     })
   })
 
-  it('malformed PDF does not replace cart', async () => {
-    // Mock parseCartPDF by mocking the module? Dynamic import; instead verify state unchanged via error banner.
+  it('PDF cart replacement', async () => {
+    parseCartPDF.mockResolvedValue({ data: newCart, errors: [] })
     render(<App />)
     const inputs = document.querySelectorAll('input[type="file"]')
-    uploadFile(inputs[0], rulesCsv(), 'rules.csv')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
-    // no pdf file input interaction beyond presence
-    expect(screen.getByText(/cart.pdf/)).toBeTruthy()
+    await waitFor(() => screen.getByText(/Cart subtotal:/))
+
+    const pdfInput = document.querySelectorAll('input[type="file"]')[2]
+    const pdfFile = new File(['dummy'], 'cart.pdf', { type: 'application/pdf' })
+    fireEvent.change(pdfInput, { target: { files: [pdfFile] } })
+
+    await waitFor(() => {
+      expect(screen.getByText('New Product')).toBeTruthy()
+    })
+    // rules still present
+    expect(screen.getByText(/rules loaded/)).toBeTruthy()
+  })
+
+  it('invalid PDF does not replace cart', async () => {
+    parseCartPDF.mockResolvedValue({ data: [], errors: ['Row 1: invalid base price "abc"'] })
+    render(<App />)
+    const inputs = document.querySelectorAll('input[type="file"]')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
+    uploadFile(inputs[1], cartCsv, 'cart.csv')
+    await waitFor(() => screen.getByText(/Cart subtotal:/))
+
+    const pdfInput = document.querySelectorAll('input[type="file"]')[2]
+    const pdfFile = new File(['dummy'], 'bad.pdf', { type: 'application/pdf' })
+    fireEvent.change(pdfInput, { target: { files: [pdfFile] } })
+
+    await waitFor(() => {
+      expect(screen.getByText(/invalid base price/)).toBeTruthy()
+    })
+    // old cart still present
+    expect(screen.getAllByText('Cushion Cover').length).toBeGreaterThan(0)
+    expect(screen.getByText(/rules loaded/)).toBeTruthy()
+  })
+
+  it('automatic recalculation on rule/cart change', async () => {
+    render(<App />)
+    const inputs = document.querySelectorAll('input[type="file"]')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
+    uploadFile(inputs[1], cartCsv, 'cart.csv')
+    await waitFor(() => screen.getByText(/5,932/))
+
+    // change cart to single item
+    const newCartCsv = `item_id,product,brand,platform,base_price\nX,Test,Natura Casa,Amazon India,1000`
+    uploadFile(inputs[1], newCartCsv, 'cart.csv')
+    await waitFor(() => {
+      expect(screen.queryByText(/5,932/)).toBeNull()
+    })
   })
 })
