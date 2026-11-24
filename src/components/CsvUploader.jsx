@@ -7,7 +7,7 @@
 
 import { useRef } from 'react'
 
-export default function CsvUploader({ label, description, onLoad, hasData, fileName }) {
+export default function CsvUploader({ label, description, onLoad, hasData, fileName, accept = '.csv' }) {
   const inputRef = useRef(null)
 
   function handleFile(e) {
@@ -35,7 +35,7 @@ export default function CsvUploader({ label, description, onLoad, hasData, fileN
       <input
         ref={inputRef}
         type="file"
-        accept=".csv"
+        accept={accept}
         style={{ display: 'none' }}
         onChange={handleFile}
       />

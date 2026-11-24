@@ -1,87 +1,82 @@
-# Opptra Discount Engine — Base Implementation
+# Opptra Discount Engine
 
-This is the base implementation for the Opptra FDE Intern assignment.
-Fork this repo, complete the tasks in the assignment brief, and submit your GitHub link + Loom.
+A shopping cart discount engine with item-level and cart-level discounts, natural-language rule creation via LLM, and PDF cart import.
 
-## Running locally
+## Features
 
-```bash
-npm install
-npm run dev
-```
+- CSV upload for discount rules and cart items
+- PDF cart upload (text-based tables)
+- Natural language discount rule input (LLM-backed, server-side)
+- Item-level discounts: competing non-stackable selection + stackable stacking
+- Cart-level discounts with minimum threshold
+- Customer-facing pricing explanations
+- Responsive dashboard UI
 
-Open http://localhost:5173
+## Tech Stack
 
-## Deploying
+- React 18, Vite 5
+- papaparse (CSV)
+- pdfjs-dist (PDF text extraction)
+- Vitest, Testing Library (tests)
+- Vercel serverless function for LLM (OpenAI-compatible)
 
-```bash
-npm run build
-```
+## Local Setup (under 3 steps)
 
-Deploy the `dist/` folder to Vercel, Netlify, or any static host.
-The live deployment URL must be in your README before submission.
+1. `npm install`
+2. (Optional) create `.env.local` with `LLM_API_KEY=...` (and optional `LLM_BASE_URL`, `LLM_MODEL`)
+3. `npm run dev` → open http://localhost:5173
 
-## How to use
+## Scripts
 
-1. Upload `sample-data/rules.csv` as the discount rules input
-2. Upload `sample-data/cart.csv` as the cart input
-3. Click **Calculate Discounts**
+- `npm run dev` — development server
+- `npm run build` — production build
+- `npm run preview` — preview build
+- `npm test` — run tests
 
-## Project structure
+## Environment Variables
 
-```
-src/
-  engine/
-    discountEngine.js   ← pure discount logic (no UI)
-    csvParser.js        ← CSV → typed objects
-  components/
-    CsvUploader.jsx     ← file upload area
-    DataTable.jsx       ← reusable table
-    ErrorBanner.jsx     ← parse error display
-  App.jsx               ← main UI + state
-  main.jsx              ← entry point
+- `LLM_API_KEY` — LLM provider API key (server-side only). Without it, NL feature is disabled gracefully.
+- `LLM_BASE_URL` — OpenAI-compatible base URL (default https://api.openai.com/v1)
+- `LLM_MODEL` — model name (default gpt-4o-mini)
 
-sample-data/
-  rules.csv             ← sample discount rules
-  cart.csv              ← sample cart items
-```
+## Testing
 
-## CSV formats
+`npm test`
 
-**rules.csv**
+## Deployment
 
-| Column     | Type              | Example          |
-|------------|-------------------|------------------|
-| rule_id    | string            | RULE-01          |
-| scope      | brand \| platform | platform         |
-| applies_to | string            | Amazon India     |
-| type       | percentage \| flat| percentage       |
-| value      | number            | 15               |
-| stackable  | true \| false     | false            |
+1. Push to GitHub.
+2. Import project in Vercel.
+3. Set environment variables in Vercel dashboard.
+4. Build command: `npm run build`, output: `dist`.
 
-**cart.csv**
+## Architecture
 
-| Column     | Type   | Example      |
-|------------|--------|--------------|
-| item_id    | string | ITEM-01      |
-| product    | string | Cushion Cover|
-| brand      | string | Natura Casa  |
-| platform   | string | Amazon India |
-| base_price | number | 1299         |
+See `src/engine/` for pure business logic. Adapters: `csvParser.js`, `pdfParser.js`, `nlParser.js`. Validation: `validators.js`. Core: `discountEngine.js`. LLM endpoint: `api/parse-rule.js`.
 
-## Discount logic
+## Discount Logic
 
-- When multiple non-stackable rules match an item, the one giving the **largest saving in rupees** is applied.
-- Rules marked `stackable: true` apply **on top of** the winning non-stackable rule.
-- If no rules match, the base price is returned with a "No offers available" note.
+- Non-stackable rules: pick largest rupee saving.
+- Stackable rules: percentage then flat, applied sequentially.
+- Cart-level: applied to subtotal after item discounts, threshold inclusive.
+- No match: base price, "No offers available".
 
-## Expected results for the sample data
+## Expected Sample Results
 
-| Item    | Base Price | Final Price | Reasoning                              |
-|---------|-----------|-------------|----------------------------------------|
-| ITEM-01 | Rs.1,299  | Rs.1,104    | Platform offer: 15% off (beats Rs.150) |
-| ITEM-02 | Rs.849    | Rs.629      | Brand offer: Rs.150 off + Platform 10% |
-| ITEM-03 | Rs.599    | Rs.509      | Platform offer: 15% off                |
-| ITEM-04 | Rs.2,499  | Rs.2,499    | No offers available                    |
-| ITEM-05 | Rs.449    | Rs.382      | Platform offer: 15% off                |
-| ITEM-06 | Rs.899    | Rs.809      | Platform offer: 10% off                |
+Subtotal ₹5,932; cart discount ₹593; final ₹5,339.
+
+## Demo Checklist
+
+1. Upload sample rules.csv and cart.csv → Calculate → verify item prices.
+2. Upload a PDF cart → verify replacement and recalc.
+3. Enter NL rule → parse → confirm → verify new rule active and prices updated.
+4. Test ambiguous NL input → clarification message.
+5. Test cart threshold boundary (exact/below).
+6. Check responsive layout on mobile width.
+
+## Assumptions
+
+- LLM provider is OpenAI-compatible; configured via env.
+- PDFs are text-based; scanned PDFs rejected.
+- In-memory session state only.
+- Rounding: paise internally, display nearest rupee.
