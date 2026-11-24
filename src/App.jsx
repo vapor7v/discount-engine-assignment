@@ -126,17 +126,23 @@ export default function App() {
   }
 
   async function handlePdfLoad(file) {
+    if (pdfLoading) return
     setPdfLoading(true)
-    const { parseCartPDF } = await import('./engine/pdfParser.js')
-    const { data, errors } = await parseCartPDF(file)
-    setPdfLoading(false)
-    if (errors && errors.length > 0) {
-      setCartErrors(errors)
-      return
+    try {
+      const { parseCartPDF } = await import('./engine/pdfParser.js')
+      const { data, errors } = await parseCartPDF(file)
+      if (errors && errors.length > 0) {
+        setCartErrors(errors)
+        return
+      }
+      setCartItems(data)
+      setCartErrors([])
+      setCartFileName(file.name)
+    } catch (e) {
+      setCartErrors([e && e.message ? e.message : 'Failed to parse PDF.'])
+    } finally {
+      setPdfLoading(false)
     }
-    setCartItems(data)
-    setCartErrors([])
-    setCartFileName(file.name)
   }
 
   function handleAddRule(rule) {

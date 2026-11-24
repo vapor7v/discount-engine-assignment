@@ -149,10 +149,8 @@ describe('parse-rule API', () => {
   })
 
   it('request timeout', async () => {
-    fetchMock.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ ok: true, status: 200, text: async () => '{}' }), 100000)))
-    const res = mockRes()
-    // temporarily lower timeout by env? Use real; instead mock AbortError
     fetchMock.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    const res = mockRes()
     await handleRequest(mockReq('POST', { description: 'test' }), res)
     expect(res.statusCode).toBe(504)
   })

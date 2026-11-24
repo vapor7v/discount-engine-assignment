@@ -45,7 +45,7 @@ async function extractTextLines(file) {
 }
 
 const isHeaderLine = (l) => /product/i.test(l) && /brand/i.test(l) && /platform/i.test(l) && /price/i.test(l)
-const isFooterLine = (l) => /total|page\s*\d|^\s*\d+\s*$/i.test(l)
+const isFooterLine = (l) => /page\s*\d|^\s*\d+\s*$/i.test(l)
 
 export function parseCartPDFLines(lines) {
   const data = []
@@ -72,7 +72,16 @@ export function parseCartPDFLines(lines) {
     if (!trimmed || isHeaderLine(trimmed) || isFooterLine(trimmed)) return
 
     const fields = trimmed.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean)
-    if (fields.length < 4) return
+    if (fields.length < 4) {
+      // Skip obvious metadata/footer lines, but flag malformed product rows.
+      if (/^(total|subtotal|grand total)/i.test(trimmed)) return
+      const hasPriceLike = fields.some((f) => /\d/.test(f))
+      if (hasPriceLike) {
+        errors.push(`Row ${rowNum}: expected 4 columns (Product, Brand, Platform, Base Price), got ${fields.length}`)
+        return
+      }
+      return
+    }
 
     let product, brand, platform, priceStr
     if (fields.length === 4) {

@@ -27,10 +27,6 @@ ITEM-04,Ceramic Vase,LivSpace Pro,Noon,2499
 ITEM-05,Cutting Board,Nordic Basics,Amazon India,449
 ITEM-06,Desk Organiser,Nordic Basics,Flipkart,899`
 
-const newCart = [
-  { itemId: 'PDF-1', product: 'New Product', brand: 'Natura Casa', platform: 'Amazon India', basePrice: 1000 },
-]
-
 describe('integration', () => {
   beforeEach(() => {
     global.fetch = vi.fn()
@@ -46,13 +42,13 @@ describe('integration', () => {
     uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
     await waitFor(() => {
-      expect(screen.getByText(/Cart subtotal:/)).toBeTruthy()
+      expect(screen.getByText(/5,932/)).toBeTruthy()
     })
-    expect(screen.getByText(/5,932/)).toBeTruthy()
     expect(screen.getByText(/5,339/)).toBeTruthy()
+    expect(screen.getAllByText((c) => c.includes('1,104')).length).toBeGreaterThan(0)
   })
 
-  it('NL workflow confirm and discard', async () => {
+  it('NL confirm increases rule count and recalculates', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ status: 'ready', rule: { scope: 'brand', appliesTo: 'Natura Casa', type: 'percentage', value: 5, stackable: true } }),
@@ -61,21 +57,35 @@ describe('integration', () => {
     const inputs = document.querySelectorAll('input[type="file"]')
     uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
+    await waitFor(() => screen.getByText(/4 rules loaded/))
 
     const textarea = screen.getByPlaceholderText(/e.g./)
     fireEvent.change(textarea, { target: { value: '5% off Natura Casa stackable' } })
     fireEvent.click(screen.getByText('Parse Rule'))
     await waitFor(() => screen.getByText('Confirm & Add'))
     fireEvent.click(screen.getByText('Confirm & Add'))
-    await waitFor(() => {
-      expect(screen.getByText(/rules loaded/)).toBeTruthy()
-    }, { timeout: 3000 })
 
-    // discard another
+    await waitFor(() => {
+      expect(screen.getByText(/5 rules loaded/)).toBeTruthy()
+    })
+    expect(screen.getAllByText('Natura Casa').length).toBeGreaterThan(0)
+  })
+
+  it('NL discard does not add rule or change totals', async () => {
     global.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ status: 'ready', rule: { scope: 'brand', appliesTo: 'Natura Casa', type: 'percentage', value: 7, stackable: true } }),
     })
+    render(<App />)
+    const inputs = document.querySelectorAll('input[type="file"]')
+    uploadFile(inputs[0], rulesCsv, 'rules.csv')
+    uploadFile(inputs[1], cartCsv, 'cart.csv')
+    await waitFor(() => screen.getByText(/4 rules loaded/))
+
+    const beforeCount = screen.getByText(/4 rules loaded/)
+    expect(beforeCount).toBeTruthy()
+
+    const textarea = screen.getByPlaceholderText(/e.g./)
     fireEvent.change(textarea, { target: { value: '7% off Natura Casa stackable' } })
     fireEvent.click(screen.getByText('Parse Rule'))
     await waitFor(() => screen.getByText('Discard'))
@@ -83,15 +93,20 @@ describe('integration', () => {
     await waitFor(() => {
       expect(screen.queryByText('Confirm & Add')).toBeNull()
     })
+    expect(screen.getByText(/4 rules loaded/)).toBeTruthy()
+    expect(screen.getByText(/5,932/)).toBeTruthy()
   })
 
   it('PDF cart replacement', async () => {
-    parseCartPDF.mockResolvedValue({ data: newCart, errors: [] })
+    parseCartPDF.mockResolvedValue({
+      data: [{ itemId: 'PDF-1', product: 'New Product', brand: 'Natura Casa', platform: 'Amazon India', basePrice: 1000 }],
+      errors: [],
+    })
     render(<App />)
     const inputs = document.querySelectorAll('input[type="file"]')
     uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
-    await waitFor(() => screen.getByText(/Cart subtotal:/))
+    await waitFor(() => screen.getByText(/Cushion Cover/))
 
     const pdfInput = document.querySelectorAll('input[type="file"]')[2]
     const pdfFile = new File(['dummy'], 'cart.pdf', { type: 'application/pdf' })
@@ -100,8 +115,10 @@ describe('integration', () => {
     await waitFor(() => {
       expect(screen.getByText('New Product')).toBeTruthy()
     })
-    // rules still present
+    expect(screen.queryByText('Cushion Cover')).toBeNull()
     expect(screen.getByText(/rules loaded/)).toBeTruthy()
+    // new item discount: 15% platform + 150 flat brand? Actually platform Amazon 15% = 150, brand flat 150 -> non-stackable max 150, final 850
+    expect(screen.getAllByText(/850/).length).toBeGreaterThan(0)
   })
 
   it('invalid PDF does not replace cart', async () => {
@@ -110,7 +127,7 @@ describe('integration', () => {
     const inputs = document.querySelectorAll('input[type="file"]')
     uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
-    await waitFor(() => screen.getByText(/Cart subtotal:/))
+    await waitFor(() => screen.getByText(/Cushion Cover/))
 
     const pdfInput = document.querySelectorAll('input[type="file"]')[2]
     const pdfFile = new File(['dummy'], 'bad.pdf', { type: 'application/pdf' })
@@ -119,23 +136,22 @@ describe('integration', () => {
     await waitFor(() => {
       expect(screen.getByText(/invalid base price/)).toBeTruthy()
     })
-    // old cart still present
     expect(screen.getAllByText('Cushion Cover').length).toBeGreaterThan(0)
     expect(screen.getByText(/rules loaded/)).toBeTruthy()
   })
 
-  it('automatic recalculation on rule/cart change', async () => {
+  it('automatic recalculation on cart change', async () => {
     render(<App />)
     const inputs = document.querySelectorAll('input[type="file"]')
     uploadFile(inputs[0], rulesCsv, 'rules.csv')
     uploadFile(inputs[1], cartCsv, 'cart.csv')
     await waitFor(() => screen.getByText(/5,932/))
 
-    // change cart to single item
     const newCartCsv = `item_id,product,brand,platform,base_price\nX,Test,Natura Casa,Amazon India,1000`
     uploadFile(inputs[1], newCartCsv, 'cart.csv')
     await waitFor(() => {
-      expect(screen.queryByText(/5,932/)).toBeNull()
+      expect(screen.getByText(/1,000|1000/)).toBeTruthy()
     })
+    expect(screen.queryByText(/5,932/)).toBeNull()
   })
 })
