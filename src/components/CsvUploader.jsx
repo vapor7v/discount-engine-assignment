@@ -1,13 +1,6 @@
-/**
- * CsvUploader.jsx
- *
- * Renders a file upload area for a single CSV file.
- * Calls onLoad(rawText) when a file is selected.
- */
-
 import { useRef } from 'react'
 
-export default function CsvUploader({ label, description, onLoad, hasData, fileName, accept = '.csv' }) {
+export default function CsvUploader({ label, description, onLoad, onError, hasData, fileName, accept = '.csv' }) {
   const inputRef = useRef(null)
 
   function handleFile(e) {
@@ -15,13 +8,26 @@ export default function CsvUploader({ label, description, onLoad, hasData, fileN
     if (!file) return
     const reader = new FileReader()
     reader.onload = (evt) => onLoad(evt.target.result, file.name)
+    reader.onerror = () => {
+      if (onError) onError(`Failed to read ${file.name}.`)
+      else onLoad('', file.name)
+    }
     reader.readAsText(file)
-    // Reset input so the same file can be re-uploaded
     e.target.value = ''
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      inputRef.current?.click()
+    }
   }
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Upload ${label}`}
       style={{
         border: `2px dashed ${hasData ? '#1e5c2c' : '#CECECE'}`,
         borderRadius: 6,
@@ -29,8 +35,12 @@ export default function CsvUploader({ label, description, onLoad, hasData, fileN
         background: hasData ? '#f0faf2' : '#fafafa',
         cursor: 'pointer',
         transition: 'border-color 0.15s',
+        outline: 'none',
       }}
       onClick={() => inputRef.current?.click()}
+      onKeyDown={handleKeyDown}
+      onFocus={(e) => { e.currentTarget.style.boxShadow = '0 0 0 2px #FF5800' }}
+      onBlur={(e) => { e.currentTarget.style.boxShadow = 'none' }}
     >
       <input
         ref={inputRef}

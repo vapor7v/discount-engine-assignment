@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import handleRequest from './api/parse-rule.js'
 
@@ -24,6 +24,10 @@ function apiMiddleware() {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), apiMiddleware()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  Object.assign(process.env, env)
+  return {
+    plugins: [react(), apiMiddleware()],
+  }
 })

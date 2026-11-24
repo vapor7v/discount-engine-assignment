@@ -6,10 +6,12 @@ export default function NaturalLanguageRule({ onAddRule }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [notConfigured, setNotConfigured] = useState(false)
 
   async function handleParse() {
     setError('')
     setResult(null)
+    setNotConfigured(false)
     if (!input.trim()) {
       setError('Please enter a discount description.')
       return
@@ -18,10 +20,14 @@ export default function NaturalLanguageRule({ onAddRule }) {
     try {
       const r = await parseNaturalLanguageRule(input)
       if (r.status === 'error') {
-        setError(r.message)
-      } else {
-        setResult(r)
+        if (/not configured/i.test(r.message || '')) {
+          setNotConfigured(true)
+        } else {
+          setError(r.message)
+        }
+        return
       }
+      setResult(r)
     } catch (e) {
       setError(e && e.message ? e.message : 'Unexpected error.')
     } finally {
@@ -40,6 +46,8 @@ export default function NaturalLanguageRule({ onAddRule }) {
   function handleDiscard() {
     setResult(null)
   }
+
+  const rule = result && result.status === 'ready' ? result.rule : null
 
   return (
     <div>
@@ -73,6 +81,12 @@ export default function NaturalLanguageRule({ onAddRule }) {
         {loading && <span style={{ fontSize: 12, color: '#888' }}>Contacting LLM...</span>}
       </div>
 
+      {notConfigured && (
+        <div style={{ marginTop: '0.5rem', background: '#f5f5f5', border: '1px solid #CECECE', borderRadius: 4, padding: '0.6rem 0.9rem', fontSize: 12, color: '#131A48' }}>
+          Natural-language rules are disabled. Configure <code>LLM_API_KEY</code> on the server to enable this feature.
+        </div>
+      )}
+
       {error && (
         <div style={{ marginTop: '0.5rem', background: '#fce8e8', border: '1px solid #e57373', borderRadius: 4, padding: '0.6rem 0.9rem', fontSize: 12, color: '#5a1010' }}>
           {error}
@@ -89,12 +103,21 @@ export default function NaturalLanguageRule({ onAddRule }) {
         </div>
       )}
 
-      {result && result.status === 'ready' && (
+      {rule && (
         <div style={{ marginTop: '0.5rem', background: '#f0faf2', border: '1px solid #a5d6a7', borderRadius: 4, padding: '0.8rem 1rem' }}>
           <div style={{ fontWeight: 700, fontSize: 12, color: '#1e5c2c', marginBottom: 6 }}>Parsed rule (review before adding)</div>
-          <pre style={{ fontSize: 12, color: '#131A48', margin: 0, whiteSpace: 'pre-wrap' }}>
-            {JSON.stringify(result.rule, null, 2)}
-          </pre>
+          <div style={{ fontSize: 12, color: '#131A48', lineHeight: 1.6 }}>
+            <div><strong>Scope:</strong> {rule.scope}</div>
+            {rule.appliesTo && <div><strong>Applies To:</strong> {rule.appliesTo}</div>}
+            <div><strong>Discount Type:</strong> {rule.type}</div>
+            <div><strong>Discount Value:</strong> {rule.type === 'percentage' ? `${rule.value}%` : `Rs.${rule.value}`}</div>
+            <div><strong>Stackable:</strong> {rule.stackable ? 'Yes' : 'No'}</div>
+            {rule.scope === 'cart' && (
+              <div style={{ fontWeight: 700, color: '#1e5c2c' }}>
+                <strong>Minimum Cart Value:</strong> Rs.{rule.minCartValue}
+              </div>
+            )}
+          </div>
           <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.5rem' }}>
             <button onClick={handleConfirm} style={{ background: '#1e5c2c', color: '#fff', border: 'none', borderRadius: 4, padding: '0.4rem 1rem', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase' }}>
               Confirm & Add

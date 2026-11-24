@@ -10,17 +10,31 @@ export default function PdfUploader({ onLoad, loading, hasData }) {
     e.target.value = ''
   }
 
+  function handleKeyDown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (!loading) inputRef.current?.click()
+    }
+  }
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label="Upload cart PDF"
       style={{
         border: `2px dashed ${hasData ? '#1e5c2c' : '#CECECE'}`,
         borderRadius: 6,
         padding: '0.8rem 1.2rem',
         background: hasData ? '#f0faf2' : '#fafafa',
-        cursor: 'pointer',
+        cursor: loading ? 'not-allowed' : 'pointer',
         marginTop: '0.5rem',
+        outline: 'none',
       }}
       onClick={() => !loading && inputRef.current?.click()}
+      onKeyDown={handleKeyDown}
+      onFocus={(e) => { e.currentTarget.style.boxShadow = '0 0 0 2px #FF5800' }}
+      onBlur={(e) => { e.currentTarget.style.boxShadow = 'none' }}
     >
       <input
         ref={inputRef}

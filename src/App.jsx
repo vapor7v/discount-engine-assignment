@@ -70,7 +70,7 @@ const S = {
   main:    { maxWidth: 960, margin: '0 auto', padding: '1.8rem 1.5rem' },
   section: { background: '#fff', border: '1px solid #CECECE', borderRadius: 6, padding: '1.2rem 1.4rem', marginBottom: '1.2rem' },
   sectionTitle: { fontFamily: 'Georgia, serif', fontWeight: 700, fontSize: 14, color: '#131A48', marginBottom: '0.7rem', paddingBottom: 6, borderBottom: '2px solid #FF5800', display: 'inline-block' },
-  grid2:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' },
+  grid2:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1rem', maxWidth: '100%' },
   btn:     {
     background: '#FF5800', color: '#fff', border: 'none', borderRadius: 4,
     padding: '0.65rem 2rem', fontSize: 13, fontWeight: 700, cursor: 'pointer',
@@ -113,15 +113,21 @@ export default function App() {
 
   function handleRulesLoad(csvText, fileName) {
     const { data, errors } = parseRulesCSV(csvText)
-    setRules(data)
     setRulesErr(errors)
+    if (errors && errors.length > 0) {
+      return
+    }
+    setRules(data)
     setRulesFileName(fileName)
   }
 
   function handleCartLoad(csvText, fileName) {
     const { data, errors } = parseCartCSV(csvText)
-    setCartItems(data)
     setCartErrors(errors)
+    if (errors && errors.length > 0) {
+      return
+    }
+    setCartItems(data)
     setCartFileName(fileName)
   }
 
@@ -175,6 +181,7 @@ export default function App() {
               label="rules.csv"
               description="Upload your discount rules CSV"
               onLoad={handleRulesLoad}
+              onError={(msg) => setRulesErr([msg])}
               hasData={rules.length > 0}
               fileName={rulesFileName}
               accept=".csv"
@@ -196,6 +203,7 @@ export default function App() {
               label="cart.csv"
               description="Upload your cart CSV"
               onLoad={handleCartLoad}
+              onError={(msg) => setCartErrors([msg])}
               hasData={cartItems.length > 0}
               fileName={cartFileName}
               accept=".csv"
@@ -231,7 +239,7 @@ export default function App() {
             <div style={{ marginTop: '0.75rem', fontSize: 13, color: '#131A48' }}>
               <div>Cart subtotal: <strong>Rs.{results.subtotal.toLocaleString('en-IN')}</strong></div>
               {results.cartDiscount > 0 && (
-                <div>Cart offer: {results.cartReasoning} — Cart discount: <strong>Rs.{results.cartDiscount.toLocaleString('en-IN')}</strong></div>
+                <div>{results.cartReasoning} — Rs.{results.cartDiscount.toLocaleString('en-IN')} saved</div>
               )}
             </div>
             <div style={S.totalRow}>
