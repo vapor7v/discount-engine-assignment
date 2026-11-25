@@ -80,7 +80,7 @@ Subtotal ₹5,932; cart discount ₹593; final ₹5,339.
 
 ## Demo Walkthrough
 
-**Loom video:** [Add your Loom recording link here]
+**Loom video:** https://www.loom.com/share/5ddc7abd56d44b0d8a1e54d0515df3ea
 
 ## Key Implementation Decisions
 
