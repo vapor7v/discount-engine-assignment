@@ -95,3 +95,7 @@ Subtotal ₹5,932; cart discount ₹593; final ₹5,339.
 - PDFs are text-based; scanned PDFs rejected.
 - In-memory session state only.
 - Rounding: paise internally, display nearest rupee.
+
+### Technical Architecture
+
+For a detailed explanation of the system architecture, discount calculation pipeline, LLM integration, PDF processing and engineering decisions, see [ARCHITECTURE.md](ARCHITECTURE.md).
